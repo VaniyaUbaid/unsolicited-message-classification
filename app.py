@@ -1,171 +1,122 @@
-import streamlit as st
-import joblib
-import pandas as pd
 from pathlib import Path
 
-# Project paths
+import streamlit as st
+
+from src.prediction import MODEL_FILES, load_models
+from src.ui import render_page
+
+
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / "models"
 
-# Page configuration
-st.set_page_config(
-    page_title="Unsolicited Message Detection",
-    page_icon="📩",
-    layout="wide"
-)
 
-# Load models once and cache them
 @st.cache_resource
-def load_models():
-    models = {}
+def get_models():
+    return load_models(BASE_DIR / "models")
 
-    model_files = {
-        "Baseline": {
-            "Naive Bayes": "naive_bayes.joblib",
-            "Logistic Regression": "logistic_regression.joblib",
-            "SVM": "svm.joblib"
-        },
-        "Balanced": {
-            "Naive Bayes": "naive_bayes_balanced.joblib",
-            "Logistic Regression": "logistic_regression_balanced.joblib",
-            "SVM": "svm_balanced.joblib"
-        }
+
+st.set_page_config(
+    page_title="MessageGuard",
+    page_icon="M",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+    <style>
+    :root {
+        --ink: #29263a;
+        --muted: #77738b;
+        --purple: #7862c8;
+        --purple-soft: #f0edfb;
+        --line: #ebe8f2;
+        --surface: #ffffff;
+        --canvas: #faf9fc;
     }
-
-    for version, model_set in model_files.items():
-        models[version] = {}
-
-        for name, filename in model_set.items():
-            path = MODEL_DIR / filename
-
-            if path.exists():
-                models[version][name] = joblib.load(path)
-
-    return models
-
-
-models = load_models()
-
-# Header
-st.title("Unsolicited Message Detection")
-st.write(
-    "Detect unsolicited messages using machine learning "
-    "and compare different classification algorithms."
+    html, body, [class*="css"] { font-family: Inter, 'Segoe UI', sans-serif; }
+    .stApp { background: var(--canvas); color: var(--ink); }
+    h1, h2, h3 { font-family: Inter, 'Segoe UI', sans-serif; color: var(--ink); }
+    h1 { letter-spacing: -0.035em; }
+    [data-testid="stSidebar"] {
+        background: #fff;
+        border-right: 1px solid var(--line);
+    }
+    [data-testid="stSidebar"] h1 { font-size: 1.65rem; }
+    [data-testid="stSidebar"] [data-testid="stRadio"] label {
+        padding: 0.3rem 0.15rem;
+    }
+    .brand-mark {
+        color: var(--purple);
+        font-family: Inter, 'Segoe UI', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -0.06em;
+    }
+    .brand-subtitle {
+        color: var(--muted);
+        font-size: 0.83rem;
+        margin-top: -0.5rem;
+        margin-bottom: 1.4rem;
+    }
+    .eyebrow {
+        color: var(--purple);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+    }
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 5px 22px rgba(49, 39, 82, 0.045);
+        padding: 1.15rem 1.3rem;
+    }
+    .muted { color: var(--muted); }
+    div.stButton > button[kind="primary"] {
+        background: var(--purple);
+        border-color: var(--purple);
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background: #6650b5;
+        border-color: #6650b5;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-st.divider()
+models = get_models()
+missing_files = [
+    filename
+    for experiment in MODEL_FILES.values()
+    for filename in experiment.values()
+    if not (BASE_DIR / "models" / filename).is_file()
+]
 
-# Model configuration
-st.subheader("Model Configuration")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    version = st.selectbox(
-        "Choose model experiment",
-        ["Baseline", "Balanced"]
+with st.sidebar:
+    st.markdown('<div class="brand-mark">MessageGuard</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="brand-subtitle">Intelligent Message Classification &amp; Analysis</div>',
+        unsafe_allow_html=True,
     )
-
-with col2:
-    selected_model = st.selectbox(
-        "Choose classifier",
+    st.markdown("---")
+    page = st.radio(
+        "Workspace",
         [
-            "Compare All Models",
-            "Naive Bayes",
-            "Logistic Regression",
-            "SVM"
-        ]
+            "Message Classification",
+            "Explainable Analysis",
+            "Suspicious Patterns",
+            "Performance Laboratory",
+            "Prediction History",
+            "Batch Analysis",
+            "Robustness Testing",
+        ],
+        label_visibility="collapsed",
     )
+    st.markdown("---")
+    st.caption("Local inference · Saved models · No cloud APIs")
+    if missing_files:
+        st.warning("Some model files are missing. Affected selections are disabled.")
 
-# Message input
-st.subheader("Enter Your Message")
-
-message = st.text_area(
-    "SMS Message",
-    placeholder="Example: Congratulations! You have won a free prize...",
-    height=150
-)
-
-# Prediction
-if st.button("Classify Message", type="primary"):
-
-    if not message.strip():
-        st.warning("Please enter a message first.")
-
-    elif version not in models or not models[version]:
-        st.error("No trained models were found. Check your models folder.")
-
-    else:
-        if selected_model == "Compare All Models":
-            selected_models = models[version]
-        else:
-            selected_models = {
-                selected_model: models[version].get(selected_model)
-            }
-
-        missing = [
-            name for name, model in selected_models.items()
-            if model is None
-        ]
-
-        if missing:
-            st.error(
-                "Missing model files for: " + ", ".join(missing)
-            )
-
-        else:
-            results = []
-
-            for name, model in selected_models.items():
-                prediction = model.predict([message])[0]
-
-                label = "Spam" if int(prediction) == 1 else "Ham"
-
-                results.append({
-                    "Model": name,
-                    "Prediction": label
-                })
-
-            st.divider()
-            st.subheader("Classification Results")
-
-            if selected_model == "Compare All Models":
-                cols = st.columns(len(results))
-
-                for col, result in zip(cols, results):
-                    with col:
-                        st.markdown(f"**{result['Model']}**")
-
-                        if result["Prediction"] == "Spam":
-                            st.error("🚨 SPAM")
-                        else:
-                            st.success("✅ HAM")
-
-                st.subheader("Prediction Comparison")
-
-                result_df = pd.DataFrame(results)
-                st.dataframe(
-                    result_df,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                spam_count = sum(
-                    r["Prediction"] == "Spam" for r in results
-                )
-
-                st.info(
-                    f"{spam_count} out of {len(results)} models "
-                    "classified this message as Spam."
-                )
-
-            else:
-                result = results[0]
-
-                if result["Prediction"] == "Spam":
-                    st.error("This message is classified as SPAM.")
-                else:
-                    st.success("This message is classified as HAM.")
-
-                st.write(f"Model used: **{result['Model']}**")
-                st.write(f"Experiment: **{version}**")
+render_page(page, models, BASE_DIR)

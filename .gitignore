@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+outputs/messageguard_history.sqlite3
